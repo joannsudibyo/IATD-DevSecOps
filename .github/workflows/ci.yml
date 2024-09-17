@@ -48,4 +48,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:     
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:latest
+          tags: |
+            bejoann/devops-lab:tagname
