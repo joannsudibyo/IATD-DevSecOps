@@ -34,8 +34,8 @@ jobs:
         with:
           azcliversion: latest
           inlineScript: |
-            # Install jq
-            apk add --no-cache jq
+            # Install jq using apt-get
+            apt-get update && apt-get install -y jq
             
             # Get the access token
             ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
