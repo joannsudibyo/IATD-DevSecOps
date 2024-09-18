@@ -55,40 +55,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: azure/login@v1.5.0
+      - name: Run Azure CLI in Docker with jq
+        uses: azure/login@v1.5.0
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Azure CLI script
-        id: token-gen
-        uses: azure/CLI@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            apt-get update && apt-get install -y jq
-            ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
-            echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
-      
-      - name: Check container status
-        env:
-          AZURE_ACCESS_TOKEN: ${{ steps.token-gen.outputs.azureAccessToken }}
+      - name: Check container status and upload reports
         run: |
-          # Check the status of the container
-          STATUS=$(az containerapp show --name devops-app --resource-group devsecops-lab --query properties.provisioningState -o tsv)
-          echo "Container status: $STATUS"
-          
-          # Mark task as completed if status is Running
-          if [ "$STATUS" == "Running" ]; then
-            echo "Container is running successfully. Task completed."
-          else
-            echo "Container is not running. Task failed."
-            exit 1
-          fi
-
-      - name: Upload reports
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          AZURE_ACCESS_TOKEN: ${{ steps.token-gen.outputs.azureAccessToken }}
-        run: |
-          WEEK1_CONTAINER=$(curl -X POST -H "Authorization: Bearer $AZURE_ACCESS_TOKEN" -d "$DOCKERHUB_USERNAME/devops-labs" https://devsecops-ver.azurewebsites.net/api/week1-container)
-          echo "Week1 container upload: $WEEK1_CONTAINER"
+          docker run --rm -v ${HOME}/.azure:/root/.azure mcr.microsoft.com/azure-cli:latest /bin/sh -c "
+            apk add --no-cache jq &&
+            ACCESS_TOKEN=\$(az account get-access-token | jq -r .accessToken) &&
+            echo \"Access Token Acquired\" &&
+            export FQDN=\$(az containerapp show -n devops-app -g devsecops-lab --query properties.configuration.ingress.fqdn -o tsv) &&
+            echo \"FQDN: \$FQDN\" &&
+            WEEK1_APP=\$(curl -X POST -H \"Authorization: Bearer \$ACCESS_TOKEN\" -d \"https://\$FQDN\" https://devsecops-ver.azurewebsites.net/api/week1-app) &&
+            echo \"Week1 app upload: \$WEEK1_APP\"
+          "
