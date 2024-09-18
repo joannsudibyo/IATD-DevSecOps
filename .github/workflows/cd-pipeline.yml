@@ -6,7 +6,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: azure/login@v1.5.0 # Updated to the latest stable version
+      - uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -24,23 +24,19 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: azure/login@v1.5.0 # Updated to the latest stable version
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Azure CLI script
         id: token-gen
-        uses: azure/CLI@v2 # Updated to the latest stable version
-        with:
-          azcliversion: latest
-          inlineScript: |
-            # Install jq using apt-get
-            apt-get update && apt-get install -y jq
-            
-            # Get the access token
-            ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
-            echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
-      
+        run: |
+          ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
+          echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Upload reports
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
