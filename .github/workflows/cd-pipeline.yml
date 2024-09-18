@@ -21,7 +21,7 @@ jobs:
           targetPort: 5000
 
   submit_results:
-    needs: [deploy]
+    needs: deploy
     runs-on: ubuntu-latest
     steps:
       - uses: azure/login@v1
@@ -36,7 +36,6 @@ jobs:
           inlineScript: |
             ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
             echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
-
       - name: Upload reports
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
