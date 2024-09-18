@@ -38,27 +38,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - uses: azure/login@v1.5.0
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Azure CLI script
-        id: token-gen
-        uses: azure/CLI@v2
-        with:
-          azcliversion: latest
-          inlineScript: |
-            # Install jq
-            apt-get update && apt-get install -y jq
-            
-            # Get the access token
-            ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
-            echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Upload reports
+      - name: Get Azure Access Token and Upload Reports
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          AZURE_ACCESS_TOKEN: ${{ steps.token-gen.outputs.azureAccessToken }}
+          AZURE_ACCESS_TOKEN: ${{ secrets.AZURE_ACCESS_TOKEN }}
         run: |
-          WEEK1_CONTAINER=$(curl -X POST -H "Authorization: Bearer $AZURE_ACCESS_TOKEN" -d "$DOCKERHUB_USERNAME/devops-labs" https://devsecops-ver.azurewebsites.net/api/week1-container)
+          ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
+          echo "Azure Access Token Acquired"
+
+          WEEK1_CONTAINER=$(curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -d "$DOCKERHUB_USERNAME/devops-labs" https://devsecops-ver.azurewebsites.net/api/week1-container)
           echo "Week1 container upload: $WEEK1_CONTAINER"
