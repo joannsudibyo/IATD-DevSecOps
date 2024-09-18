@@ -22,7 +22,6 @@ jobs:
 
   submit_results:
     needs: deploy
-    if: true
     runs-on: ubuntu-latest
     steps:
       - uses: azure/login@v1
@@ -35,8 +34,13 @@ jobs:
         with:
           azcliversion: latest
           inlineScript: |
+            # Install jq
+            apk add --no-cache jq
+            
+            # Get the access token
             ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
             echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+      
       - name: Upload reports
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
