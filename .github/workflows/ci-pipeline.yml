@@ -1,4 +1,4 @@
-name: Python test and build
+name: Python Test, Scan, and Build Pipeline
 
 on: [push]
 
@@ -21,31 +21,29 @@ jobs:
           pytest api_tests.py --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
-        id: artifact-upload-step
         with:
-          name: test-results
+          name: coverage-reports
           path: junit/test-results.xml
 
-sonarqube:
-    needs: test
-    if: true
+  sonarqube:
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-      with:
-        # Disabling shallow clones is recommended for improving the relevancy of reporting
-        fetch-depth: 0
-    - name: SonarQube Scan
-      uses: sonarsource/sonarqube-scan-action@master
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
-        
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
+
   build:
-    needs: test
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write    
+      id-token: write
+      contents: read
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -56,35 +54,35 @@ sonarqube:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
-        with:     
+        with:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:latest
 
   submit_results:
-    needs: build
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - uses: azure/login@v1
+      - name: Azure Login
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Azure CLI script
+      - name: Azure CLI script to get access token
         run: |
           ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
           echo "Azure Access Token Acquired"
-          echo "azureAccessToken=$ACCESS_TOKEN" >> "$GITHUB_ENV"
+          echo "AZURE_ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
 
-      - name: Upload reports
+      - name: Upload reports to API
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          AZURE_ACCESS_TOKEN: ${{ env.azureAccessToken }}
+          AZURE_ACCESS_TOKEN: ${{ env.AZURE_ACCESS_TOKEN }}
         run: |
-          export FQDN=$(az containerapp show -n devops-app -g devsecops-lab --query properties.configuration.ingress.fqdn -o tsv)
+          FQDN=$(az containerapp show -n devops-app -g devsecops-lab --query properties.configuration.ingress.fqdn -o tsv)
           echo "FQDN: $FQDN"
           WEEK1_APP=$(curl -X POST -H "Authorization: Bearer $AZURE_ACCESS_TOKEN" -d "https://$FQDN" https://devsecops-ver.azurewebsites.net/api/week1-app)
           echo "Week1 app upload: $WEEK1_APP"
