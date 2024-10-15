@@ -1,4 +1,4 @@
-name: Python test and build
+name: CI Pipeline
 
 on: [push, pull_request]
 
@@ -28,7 +28,6 @@ jobs:
   sonarqube:
     needs: test
     runs-on: ubuntu-latest
-    if: false  # Disable SonarQube temporarily for faster pipeline during changes
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +39,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
 
   dast:
-    needs: test
+    needs: test  # Runs in parallel with SonarQube after Test job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,4 +78,15 @@ jobs:
           # Update the OpenAPI spec file to use the deployed app URL
           sed -i "s,http://localhost:5000,https://$FQDN,g" $GITHUB_WORKSPACE/openapi_specs/openapi3.yml
 
-          sed -i "s,http://localhost:5000,https://$FQDN,g" $GITHUB_WORKSPACE/openapi_specs/openapi3.yml
+  build:
+    needs: [sonarqube, dast]  # Waits for both SonarQube and DAST to complete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push final image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:latest
