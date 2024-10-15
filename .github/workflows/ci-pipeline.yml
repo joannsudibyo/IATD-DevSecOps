@@ -1,64 +1,49 @@
-name: Python Test, Scan, and Build Pipeline
+name: Deploy
 
-on: [push]
+on: workflow_dispatch
 
 jobs:
-  test:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:latest
+          containerAppName: devops-app
+          containerAppEnvironment: devops-app-env
+          resourceGroup: devsecops-lab
+          location: australiaeast
+          targetPort: 5000
+
+      - name: Deploy DAST Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          imageToDeploy: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:dast-test
+          containerAppName: devops-test-app
+          containerAppEnvironment: devops-app-env
+          resourceGroup: devsecops-lab
+          location: australiaeast
+          targetPort: 5000
+
+      - name: Get deployed DAST app URL
+        run: |
+          export FQDN=$(az containerapp show -n devops-test-app -g devsecops-lab --query properties.configuration.ingress.fqdn -o tsv)
+          echo "TEST_APP_URL=https://$FQDN" >> $GITHUB_ENV
+          echo "Deployed DAST app URL: https://$FQDN"
+          curl https://$FQDN/ui
+          # Update the OpenAPI spec file to use the deployed app URL
+          sed -i "s,http://localhost:5000,https://$FQDN,g" $GITHUB_WORKSPACE/openapi_specs/openapi3.yml
+
+  dast:
+    needs: deploy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Test with pytest
-        run: |
-          pip install pytest pytest-cov
-          pytest api_tests.py --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-reports
-          path: junit/test-results.xml
-
-  sonarqube:
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
-
-      - name: Download SonarQube report
-        run: |
-          sleep 30
-          URL="${{ secrets.SONAR_URL }}/api/qualitygates/project_status?p=1&projectKey=devsecops-app&branch=main"
-          echo "Report URL $URL"
-          curl -u ${{ secrets.SONAR_TOKEN }}: "$URL" -o sonarqube-report.json
-
-      - name: Upload SonarQube report
-        id: artifact-sonarqube
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonarqube-report
-          path: sonarqube-report.json
-
-  build:
-    needs: [test]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -68,35 +53,27 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push Docker image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/devops-labs:dast-test
+      - name: Run DAST scan
+        run: |
+          echo "Running DAST scan on deployed app"
+          docker run -t owasp/zap2docker-stable zap-baseline.py -t ${{ env.TEST_APP_URL }} -r zap-report.html
+      - name: Upload DAST report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-report
+          path: zap-report.html
 
   submit_results:
-    needs: [build]
+    needs: [dast]
     runs-on: ubuntu-latest
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Azure CLI script to get access token
-        run: |
-          ACCESS_TOKEN=$(az account get-access-token | jq -r .accessToken)
-          echo "Azure Access Token Acquired"
-          echo "AZURE_ACCESS_TOKEN=$ACCESS_TOKEN" >> "$GITHUB_ENV"
-
-      - name: Upload reports to API
-        env:
-          AZURE_ACCESS_TOKEN: ${{ env.AZURE_ACCESS_TOKEN }}
+      - name: Submit Week2 results
         run: |
           FQDN=$(az containerapp show -n devops-app -g devsecops-lab --query properties.configuration.ingress.fqdn -o tsv)
-          echo "FQDN: $FQDN"
-          WEEK1_APP=$(curl -X POST -H "Authorization: Bearer $AZURE_ACCESS_TOKEN" -d "https://$FQDN" https://devsecops-ver.azurewebsites.net/api/week1-app)
-          echo "Week1 app upload: $WEEK1_APP"
+          WEEK2_SUBMIT=$(curl -X POST -H "Authorization: Bearer $AZURE_ACCESS_TOKEN" -d "https://$FQDN" https://devsecops-ver.azurewebsites.net/api/week2-submit)
+          echo "Week2 submit: $WEEK2_SUBMIT"
