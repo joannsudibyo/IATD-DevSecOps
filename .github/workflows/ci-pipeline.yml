@@ -26,9 +26,9 @@ jobs:
           path: junit/test-results.xml
 
   sonarqube:
-    needs: test  # Runs after Test job
+    needs: test  
     runs-on: ubuntu-latest
-    if: false  # SonarQube temporarily disabled
+    if: false 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,7 +40,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
 
   dast:
-    needs: [test, sonarqube]  # Make sure DAST runs after test and sonarqube
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
