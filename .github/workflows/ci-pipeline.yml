@@ -28,7 +28,7 @@ jobs:
   sonarqube:
     needs: test
     runs-on: ubuntu-latest
-    if: always(false)
+    if: false
     steps:
       - uses: actions/checkout@v3
         with:
