@@ -1,4 +1,4 @@
-name: Python test and build with DAST
+name: Python test and build with DAST and SonarQube
 
 on: [push]
 
@@ -25,20 +25,19 @@ jobs:
           name: test-results
           path: junit/test-results.xml
 
-  sonarqube:
+  dast_and_sonarqube:
     needs: test
     runs-on: ubuntu-latest
-    if: false
     steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+
+      # SonarQube scan
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
-      
+
       - name: Download SonarQube report
         run: |
           sleep 30  # Wait for the report to be generated
@@ -51,12 +50,7 @@ jobs:
           name: sonarqube-report
           path: sonarqube-report.json
 
-  dast:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
+      # DAST - Docker build and deploy
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -97,6 +91,7 @@ jobs:
           curl https://$FQDN/ui
           sed -i "s,http://localhost:5000,https://$FQDN,g" $GITHUB_WORKSPACE/openapi_specs/openapi3.yml
 
+      # Run ZAP Scan
       - name: ZAP Scan
         uses: zaproxy/action-api-scan@v0.6.0
         with:
@@ -117,7 +112,7 @@ jobs:
           path: report_json.json
 
   build:
-    needs: [test, dast]
+    needs: [test, dast_and_sonarqube]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
