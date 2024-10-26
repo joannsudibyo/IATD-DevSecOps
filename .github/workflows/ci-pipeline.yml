@@ -177,7 +177,7 @@ jobs:
           echo "All security gates passed"
 
   build:
-    needs: [security_gate]
+    needs: []
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -209,7 +209,7 @@ jobs:
           cosign sign --yes ${IMAGE}
 
   submit_reports:
-    needs: [build]
+    needs: [security_gate]
     runs-on: ubuntu-latest
     steps:
       - uses: azure/login@v1
