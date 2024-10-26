@@ -25,13 +25,13 @@ jobs:
           name: test-results
           path: junit/test-results.xml
 
-  dast_and_sonarqube:
+  sonarqube:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      # SonarQube scan
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:
@@ -50,7 +50,12 @@ jobs:
           name: sonarqube-report
           path: sonarqube-report.json
 
-      # DAST - Docker build and deploy
+  dast:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -91,7 +96,6 @@ jobs:
           curl https://$FQDN/ui
           sed -i "s,http://localhost:5000,https://$FQDN,g" $GITHUB_WORKSPACE/openapi_specs/openapi3.yml
 
-      # Run ZAP Scan
       - name: ZAP Scan
         uses: zaproxy/action-api-scan@v0.6.0
         with:
@@ -112,7 +116,7 @@ jobs:
           path: report_json.json
 
   build:
-    needs: [test, dast_and_sonarqube]
+    needs: [sonarqube, dast]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
