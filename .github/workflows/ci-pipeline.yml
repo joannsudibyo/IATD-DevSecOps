@@ -127,7 +127,7 @@ jobs:
           path: ${{ steps.image-scan.outputs.json }}
 
   security_gate:
-    needs: [sonarqube, dast, image-scan]
+    needs: []
     runs-on: ubuntu-latest
     steps:
       - name: Download sonarqube-report
@@ -177,7 +177,7 @@ jobs:
           echo "All security gates passed"
 
   build:
-    needs: []
+    needs: [sonarqube, dast, image-scan]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -209,7 +209,7 @@ jobs:
           cosign sign --yes ${IMAGE}
 
   submit_reports:
-    needs: []
+    needs: [sonarqube, dast, image-scan]
     runs-on: ubuntu-latest
     steps:
       - uses: azure/login@v1
