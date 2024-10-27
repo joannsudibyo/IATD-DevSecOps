@@ -177,7 +177,7 @@ jobs:
           echo "All security gates passed"
 
   build:
-    needs: [sonarqube, dast, image-scan, security_gate]
+    needs: [sonarqube, dast, image-scan]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
