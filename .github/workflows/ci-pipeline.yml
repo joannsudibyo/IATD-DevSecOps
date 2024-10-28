@@ -127,7 +127,7 @@ jobs:
           path: ${{ steps.image-scan.outputs.json }}
 
   security_gate:
-    needs: test
+    needs: []
     runs-on: ubuntu-latest
     steps:
       - name: Download sonarqube-report
